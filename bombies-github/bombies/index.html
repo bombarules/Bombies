@@ -846,7 +846,7 @@ function buildHuman(G,mat){
 }
 
 /* ================= sky + lights (dusk) ================= */
-const MAP=(()=>{try{return (JSON.parse(localStorage.getItem('sb-outbreak-set')||'{}').map)||'park';}catch(e){return 'park';}})();const PARK={};const DEADZONE=(()=>{try{return (JSON.parse(localStorage.getItem('sb-outbreak-set')||'{}').mode)==='deadzone';}catch(e){return false;}})()&&MAP==='garage';
+const MAP=(()=>{try{return (JSON.parse(localStorage.getItem('sb-outbreak-set')||'{}').map)||'park';}catch(e){return 'park';}})();const PARK={};const HORDE=(()=>{try{return (JSON.parse(localStorage.getItem('sb-outbreak-set')||'{}').mode)==='horde';}catch(e){return false;}})();const DEADZONE=(()=>{try{return (JSON.parse(localStorage.getItem('sb-outbreak-set')||'{}').mode)==='deadzone';}catch(e){return false;}})()&&MAP==='garage';
 const SUN_DIR=new THREE.Vector3(-0.82,0.42,0.38).normalize();
 const skyTex=canvasTex(64,512,(g,w,h)=>{const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#1c2433');gr.addColorStop(0.42,'#4a4f5c');gr.addColorStop(0.5,'#c98a5a');gr.addColorStop(0.53,'#7a6656');gr.addColorStop(1,'#2a2725');g.fillStyle=gr;g.fillRect(0,0,w,h);});
 skyTex.wrapS=THREE.ClampToEdgeWrapping;skyTex.wrapT=THREE.ClampToEdgeWrapping;
@@ -1490,7 +1490,7 @@ function setState(s){G.state=s;const hd=$('hud');hd.classList.toggle('lo',s==='l
     if(s==='title'){hud.ovt.textContent='BOMBIES';hud.ovh.textContent='Best survival score: '+G.best.toLocaleString()+'  \u00b7  Alley Shot top: '+AL.best.toLocaleString();}
     if(s==='paused'||s==='alleypaused'){hud.ovt.textContent='Paused';hud.ovh.textContent='';}
     if(s==='over'){if(G.score>G.best){G.best=G.score;try{localStorage.setItem('sb-outbreak-best',String(G.best));}catch(e){}}
-      hud.ovt.textContent=G.won?'Dead Zone cleared':'You didn\u2019t make it';hud.ovh.textContent=(G.won?'All three rounds survived. ':'Wave '+G.wave+'. ')+G.score.toLocaleString()+' points. Best: '+G.best.toLocaleString()+'.';G.won=false;}
+      hud.ovt.textContent=G.won?(G.wonText||'Dead Zone cleared'):'You didn\u2019t make it';hud.ovh.textContent=(G.won?(HORDE?HZ.kills.toLocaleString()+' Bombies down on '+HLV().name+'. ':'All three rounds survived. '):'Wave '+G.wave+'. ')+G.score.toLocaleString()+' points. Best: '+G.best.toLocaleString()+'.';G.won=false;G.wonText='';}
     if(s==='alleyover'){hud.ovt.textContent='Game over';hud.ovh.textContent=AL.score.toLocaleString()+' points, round '+AL.round+'. Top: '+AL.best.toLocaleString()+'.';}
     if(s==='controls'){hud.ovt.textContent='Controls';hud.ovh.textContent='';}
     if(s==='mapping'){hud.ovt.textContent='Controller map';hud.ovh.textContent='Labels show what each control does in a game.';}
@@ -2015,13 +2015,122 @@ function animateZombie(e,dt,moving){const r=e.r;
   if(e.jawSide===undefined)e.jawSide=(Math.random()<0.5?-1:1)*(0.25+Math.random()*0.5);
   animateFace(r.face,e.fs,dt,{ex:{snarl:clamp((e.seen?0.85:0.45)+Math.sin(G.time*1.7+e.t)*0.15+(e.stagger>0.3?0.3:0),0,1),sneer:e.seen?0.7:0.35,frown:0.35,squint:e.stagger>0.3?0.9:(e.seen?0.3:0),jawX:e.jawSide*(e.eating?0.5+0.5*Math.sin(G.time*7+e.t):1),puff:0},lid:e.seen?0.32:0.12,brow:0,furrow:0.55,mouth:e.eating?0.25+0.4*Math.abs(Math.sin(G.time*7+e.t)):mouth,gazeYaw:e.seen?(e.lookYaw||0)*0.5:0,gazePitch:0.05,blinkMin:6,blinkVar:8});
 }
+/* ================= HORDE mode ================= */
+// Six difficulties. Endless Bombies, unlimited ammo, weapons get bigger as the kill count climbs,
+// a tank arrives, and the level ends when you reach the kill goal.
+const HORDE_LV=[
+  {name:'Just born',cap:5,crowd:0,cs:0.3,zs:0.45,crawl:true,runners:0,tank:40,win:80},
+  {name:'Crawling',cap:8,crowd:60,cs:0.5,zs:0.6,crawl:true,runners:0,tank:60,win:120},
+  {name:'Walking',cap:14,crowd:220,cs:1.0,zs:0.9,crawl:false,runners:0,tank:90,win:190},
+  {name:'Jogging',cap:20,crowd:520,cs:1.8,zs:1.15,crawl:false,runners:0.3,tank:130,win:280},
+  {name:'Running',cap:28,crowd:950,cs:2.8,zs:1.35,crawl:false,runners:1,tank:180,win:400},
+  {name:'Running for your life',cap:36,crowd:1600,cs:3.6,zs:1.6,crawl:false,runners:1,tank:250,win:550}];
+function HLV(){return HORDE_LV[clamp(SET.hordeLvl|0,0,5)];}
+const HZ={kills:0,tier:-1,spawnT:0,hudT:0,dmg:1,tank:null,crowd:null,inst:[],won:false};
+// weapon ladder, by share of the kills needed for the tank
+const H_TIERS=[[0,'rifle','M21 rifle'],[0.25,'shotgun','Incendiary shotgun'],[0.5,'rifle','Explosive M21 rounds'],[0.75,'rpg','Rapid RPG']];
+function hordeReset(){HZ.kills=0;HZ.tier=-1;HZ.dmg=1;HZ.spawnT=1;HZ.won=false;if(HZ.tank){scene.remove(HZ.tank.g);HZ.tank=null;}P.tank=null;buildCrowd();}
+function hordeTierUp(){const lv=HLV(),f=HZ.kills/lv.tank;let t=0;for(let i=0;i<H_TIERS.length;i++)if(f>=H_TIERS[i][0])t=i;if(t===HZ.tier)return;HZ.tier=t;
+  const [,k,label]=H_TIERS[t];INV[k]=INV[k]||{own:true,ammo:GUNS[k].mag,reserve:Infinity};INV[k].own=true;
+  CH.boomammo=t===2;if(k==='shotgun'){ATT.shotgun.ammo='fire';applyAttachments();}
+  if(k==='rpg'){GUNS.rpg.cd=0.32;GUNS.rpg.reload=0.01;}
+  if(P.weapon!==k&&!P.tank){P.weapon=k;equip(k);}if(t>0){showMsg('WEAPON UPGRADE: '+label,2.2);tone(500,1100,0.25,0.18,'sawtooth');}}
+/* ----- the crowd: a sea of far-away Bombies drawn in one go ----- */
+function crowdGeo(){const sk=[0.42,0.47,0.38],cl=[0.32,0.33,0.36],dk=[0.12,0.12,0.13];
+  return mergeParts([P_(new THREE.BoxGeometry(0.46,0.62,0.26),M(0,1.12,0),cl),P_(new THREE.BoxGeometry(0.24,0.28,0.24),M(0,1.62,-0.04),sk),
+    P_(new THREE.BoxGeometry(0.17,0.78,0.2),M(-0.12,0.42,0),dk),P_(new THREE.BoxGeometry(0.17,0.78,0.2),M(0.12,0.42,0),dk),
+    P_(new THREE.BoxGeometry(0.11,0.11,0.6),M(-0.3,1.3,-0.26),sk),P_(new THREE.BoxGeometry(0.11,0.11,0.6),M(0.3,1.32,-0.26),sk)]);}
+function buildCrowd(){if(HZ.crowd){scene.remove(HZ.crowd);HZ.crowd=null;}HZ.inst=[];if(!HORDE)return;const n=HLV().crowd;if(!n)return;
+  const mesh=new THREE.InstancedMesh(crowdGeo(),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}),n);mesh.frustumCulled=false;mesh.castShadow=false;
+  HZ.dir=Math.random()*Math.PI*2;const c=new THREE.Color();
+  for(let i=0;i<n;i++){const it={ph:Math.random()*6.28,sp:0.75+Math.random()*0.5};crowdPlace(it,true);HZ.inst.push(it);c.setHSL(0.18+Math.random()*0.1,0.12,0.45+Math.random()*0.35);mesh.setColorAt(i,c);}
+  scene.add(mesh);HZ.crowd=mesh;}
+function crowdPlace(it,init){const a=HZ.dir+(Math.random()-.5)*(init?2.2:1.6),r=(init?40:70)+Math.random()*(init?60:35);it.x=P.x+Math.sin(a)*r;it.z=P.z+Math.cos(a)*r;}
+const _cm=new THREE.Matrix4(),_cq=new THREE.Quaternion(),_cs=new THREE.Vector3(1,1,1),_cp=new THREE.Vector3(),_ce=new THREE.Euler();
+function updateCrowd(dt){const m=HZ.crowd;if(!m)return;const lv=HLV();const live=enemies.filter(e=>!e.dead).length;
+  // the horde slowly swings round to follow you
+  const tx=P.x-Math.sin(HZ.dir)*60,tz=P.z-Math.cos(HZ.dir)*60;
+  for(let i=0;i<HZ.inst.length;i++){const it=HZ.inst[i];const dx=P.x-it.x,dz=P.z-it.z,d=Math.hypot(dx,dz)||1;const v=lv.cs*it.sp*dt;
+    it.x+=dx/d*v+Math.sin(it.ph*0.7)*0.3*dt;it.z+=dz/d*v+Math.cos(it.ph*0.6)*0.3*dt;it.ph+=dt*(2+lv.cs);
+    if(d<17){if(live<lv.cap&&Math.random()<0.5)hordeSpawn(it.x,it.z);crowdPlace(it,false);}
+    _cp.set(it.x,Math.abs(Math.sin(it.ph))*0.08,it.z);_ce.set(0,Math.atan2(dx,dz)+Math.PI,Math.sin(it.ph)*0.1);_cq.setFromEuler(_ce);_cm.compose(_cp,_cq,_cs);m.setMatrixAt(i,_cm);}
+  m.instanceMatrix.needsUpdate=true;}
+function crowdKill(x,z,r){let n=0;for(const it of HZ.inst){if(Math.hypot(it.x-x,it.z-z)<r){if(n<6)spark(new THREE.Vector3(it.x,1,it.z),0x7a1010,0.5);crowdPlace(it,false);n++;}}if(n)hordeCount(n);return n;}
+function crowdRay(o,d,len,w){let n=0;for(const it of HZ.inst){const vx=it.x-o.x,vz=it.z-o.z;const t=vx*d.x+vz*d.z;if(t<0||t>len)continue;const px=vx-d.x*t,pz=vz-d.z*t;if(px*px+pz*pz<w*w){crowdPlace(it,false);n++;if(n>2)break;}}if(n)hordeCount(n);return n;}
+/* ----- spawning the up-close Bombies ----- */
+function hordeSpawn(x,z){const n=enemies.length;spawnEnemy0();const e=enemies[enemies.length-1];if(!e||enemies.length===n&&e.dead)return;const lv=HLV();
+  if(x!==undefined){e.x=x;e.z=z;}e.speed*=lv.zs;e.runner=Math.random()<lv.runners;if(lv.crawl){e.crawl=true;e.legs=2;}e.mode='chase';e.alert=1;}
+function hordeCount(n){HZ.kills+=n;G.score+=n*25;hordeTierUp();checkHordeWin();}
+function checkHordeWin(){if(HZ.won||HZ.kills<HLV().win)return;HZ.won=true;G.won=true;G.wonText='Horde cleared';if(P.tank)exitTank();setTimeout(()=>setState('over'),600);}
+// count every Bombie that dies, and hit harder as the count grows
+{const _de=damageEnemy;damageEnemy=function(e,dmg,head,dir,silent,parts){const was=!e.dead;if(HORDE)dmg*=HZ.dmg;const r=_de(e,dmg,head,dir,silent,parts);if(HORDE&&was&&e.dead)hordeCount(1);return r;};}
+{const _ex=explode;explode=function(x,y,z,opt){_ex(x,y,z,opt);if(HORDE&&HZ.crowd)crowdKill(x,z,opt&&opt.big?7:4.5);};}
+/* ----- the tank ----- */
+function buildTank(){const g=new THREE.Group(),ol=[0.28,0.31,0.2],dk=[0.09,0.09,0.09],mt=[0.18,0.19,0.17];
+  const hull=new THREE.Mesh(mergeParts([P_(new THREE.BoxGeometry(3.0,0.9,5.4),M(0,0.95,0),ol),P_(new THREE.BoxGeometry(2.6,0.5,1.2),M(0,1.2,-2.6,0.5,0,0),ol),
+    P_(new THREE.BoxGeometry(0.75,1.0,5.8),M(-1.75,0.6,0),dk),P_(new THREE.BoxGeometry(0.75,1.0,5.8),M(1.75,0.6,0),dk),
+    ...[-2.2,-1.1,0,1.1,2.2].flatMap(z=>[P_(new THREE.CylinderGeometry(0.42,0.42,0.8,14),M(-1.75,0.48,z,0,0,Math.PI/2),mt),P_(new THREE.CylinderGeometry(0.42,0.42,0.8,14),M(1.75,0.48,z,0,0,Math.PI/2),mt)])]),vc);
+  hull.castShadow=true;g.add(hull);
+  const tur=new THREE.Group();tur.position.y=1.45;g.add(tur);
+  tur.add(new THREE.Mesh(mergeParts([P_(new THREE.CylinderGeometry(1.25,1.45,0.75,16),M(0,0.35,0),ol),P_(new THREE.BoxGeometry(1.6,0.55,1.3),M(0,0.4,0.9),ol),
+    P_(new THREE.CylinderGeometry(0.42,0.42,0.18,12),M(0.45,0.8,0.1),mt)]),vc));
+  const gun=new THREE.Group();gun.position.set(0,0.4,-1.1);tur.add(gun);
+  gun.add(new THREE.Mesh(mergeParts([P_(new THREE.CylinderGeometry(0.11,0.13,3.6,12),M(0,0,-1.8,Math.PI/2,0,0),mt),P_(new THREE.CylinderGeometry(0.17,0.17,0.45,12),M(0,0,-3.55,Math.PI/2,0,0),dk),P_(new THREE.BoxGeometry(0.5,0.45,0.6),M(0,0,0),ol)]),vc));
+  const hmg=new THREE.Mesh(mergeParts([P_(new THREE.CylinderGeometry(0.04,0.04,1.3,8),M(0,0,-0.65,Math.PI/2,0,0),dk),P_(new THREE.BoxGeometry(0.22,0.24,0.5),M(0,0,0.1),dk),P_(new THREE.CylinderGeometry(0.03,0.03,0.4,6),M(0,-0.25,0.1),dk)]),vc);
+  hmg.position.set(-0.5,1.05,0.2);tur.add(hmg);
+  const lt=new THREE.PointLight(0xffd36a,0,8);lt.position.set(0,1.5,0);tur.add(lt);
+  scene.add(g);return {g,tur,gun,hmg,lt,x:0,z:0,ry:0,speed:0,ty:0,pitch:0,cd:0,w:'hmg',hp:1};}
+function spawnTank(){const t=buildTank();const a=P.yaw+Math.PI*0.5;t.x=P.x+Math.sin(a)*10;t.z=P.z+Math.cos(a)*10;t.g.position.set(t.x,0,t.z);t.ry=P.yaw;HZ.tank=t;
+  showMsg('TANK ARRIVED \u2014 '+(btnFor('use')||'Use')+' to get in',3);for(let i=0;i<14;i++)emit('smoke',t.x+(Math.random()-.5)*4,0.4,t.z+(Math.random()-.5)*5,(Math.random()-.5)*2,1+Math.random(),(Math.random()-.5)*2,1.6,1.4,2);tone(90,60,0.6,0.25,'sawtooth');}
+function nearTank(){const t=HZ.tank;return t&&!P.tank&&Math.hypot(t.x-P.x,t.z-P.z)<4.2;}
+function enterTank(){P.tank=HZ.tank;P.tank.ty=0;P.tank.pitch=0;showMsg('Tank: B fires, R1 switches gun',2.5);tone(140,90,0.3,0.2,'sawtooth');}
+function exitTank(){const t=P.tank;if(!t)return;P.tank=null;P.x=t.x+Math.cos(t.ry)*3.4;P.z=t.z-Math.sin(t.ry)*3.4;hero.root.visible=true;}
+function switchTankGun(){const t=P.tank;t.w=t.w==='hmg'?'cannon':'hmg';showMsg(t.w==='hmg'?'Heavy machine gun':'Main cannon',1);tone(300,200,0.08,0.12,'square');}
+const SHELLS=[];
+function driveTank(dt){const t=P.tank;const st=readStick();
+  t.speed=damp(t.speed,-st.y*7.5,2.2,dt);t.ry-=st.x*dt*1.25*(t.speed<-0.3?-1:1);
+  const fx=-Math.sin(t.ry),fz=-Math.cos(t.ry),lim=W-3;t.x=clamp(t.x+fx*t.speed*dt,-lim,lim);t.z=clamp(t.z+fz*t.speed*dt,-lim,lim);
+  t.g.position.set(t.x,0,t.z);t.g.rotation.y=t.ry;P.x=t.x;P.z=t.z;
+  // right stick turns the turret and raises the gun
+  t.ty-=stickVec2.x*dt*1.6;t.pitch=clamp(t.pitch-stickVec2.y*dt*0.8,-0.12,0.35);t.tur.rotation.y=t.ty;t.gun.rotation.x=t.pitch;t.hmg.rotation.x=t.pitch;
+  // tracks crush whatever is under them
+  if(Math.abs(t.speed)>1)for(const e of enemies)if(!e.dead&&Math.hypot(e.x-t.x,e.z-t.z)<2.6)damageEnemy(e,99,false,new THREE.Vector3(fx,0,fz));
+  if(HZ.crowd&&Math.abs(t.speed)>1)crowdKill(t.x,t.z,2.9);
+  t.cd-=dt;t.lt.intensity=Math.max(0,t.lt.intensity-dt*30);
+  if(input.fire&&t.cd<=0){const a=t.ry+t.ty;const d=new THREE.Vector3(-Math.sin(a)*Math.cos(t.pitch),Math.sin(t.pitch),-Math.cos(a)*Math.cos(t.pitch));
+    const o=new THREE.Vector3();(t.w==='hmg'?t.hmg:t.gun).localToWorld(o.set(0,0,t.w==='hmg'?-1.3:-3.8));
+    if(t.w==='hmg'){t.cd=0.07;t.lt.intensity=3;G.shake=Math.max(G.shake,0.04);noise(0.06,2400,700,0.22,'bandpass');
+      let best=null,bd=1e9;for(const e of enemies){if(e.dead)continue;const vx=e.x-o.x,vz=e.z-o.z,tt=vx*d.x+vz*d.z;if(tt<0||tt>90)continue;const px=vx-d.x*tt,pz=vz-d.z*tt;if(px*px+pz*pz<1.2&&tt<bd){bd=tt;best=e;}}
+      if(best)damageEnemy(best,4,Math.random()<0.25,d);crowdRay(o,new THREE.Vector3(d.x,0,d.z).normalize(),90,0.9);
+      const end=o.clone().addScaledVector(d,best?bd:60);tracer(o,end);}
+    else{t.cd=1.1;t.lt.intensity=8;G.shake=Math.max(G.shake,0.35);noise(0.5,300,60,0.5,'lowpass');tone(80,40,0.4,0.3,'sawtooth');
+      const m=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,0.5,8),gunMat);m.position.copy(o);scene.add(m);SHELLS.push({m,v:d.clone().multiplyScalar(70),t:2.5});
+      for(let i=0;i<6;i++)emit('smoke',o.x,o.y,o.z,d.x*3+(Math.random()-.5),d.y*3+Math.random(),d.z*3+(Math.random()-.5),0.9,0.7,1.6);}}
+  updateShells(dt);}
+function updateShells(dt){for(const s of SHELLS.slice()){s.t-=dt;s.v.y-=4*dt;s.m.position.addScaledVector(s.v,dt);const p=s.m.position;
+    const hitE=enemies.some(e=>!e.dead&&Math.hypot(e.x-p.x,e.z-p.z)<1.2&&p.y<2.2);
+    if(p.y<=groundAt(p.x,p.z)+0.1||hitE||s.t<=0){scene.remove(s.m);SHELLS.splice(SHELLS.indexOf(s),1);explode(p.x,Math.max(0.2,p.y),p.z,{fire:false,big:true});}}}
+function tracer(a,b){const g=new THREE.BufferGeometry().setFromPoints([a,b]);const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xffe08a,transparent:true,opacity:0.9}));scene.add(l);setTimeout(()=>{scene.remove(l);g.dispose();},60);}
+function tankCamera(dt){const t=P.tank,a=t.ry+t.ty;const fx=-Math.sin(a),fz=-Math.cos(a);
+  camPos.x=damp(camPos.x,t.x-fx*9,6,dt);camPos.z=damp(camPos.z,t.z-fz*9,6,dt);camPos.y=damp(camPos.y,4.6,6,dt);camera.position.copy(camPos);
+  if(G.shake>0){camera.position.x+=(Math.random()-.5)*G.shake;camera.position.y+=(Math.random()-.5)*G.shake;G.shake=Math.max(0,G.shake-dt*0.9);}
+  camera.lookAt(t.x+fx*14,1.6+t.pitch*14,t.z+fz*14);camera.fov=damp(camera.fov,62*FOVK(),4,dt);camera.updateProjectionMatrix();hero.root.visible=false;VM.visible=false;}
+/* ----- per frame ----- */
+function updateHorde(dt){if(!HORDE||G.state!=='play')return;const lv=HLV();G.toSpawn=0;G.between=99;
+  // unlimited ammo, no reloading
+  const Wp=GUNS[P.weapon];if(Wp&&P.ammo<Wp.mag){P.ammo=Wp.mag;P.reserve=Infinity;P.reloadT=0;}
+  HZ.dmg=1+HZ.kills/120;
+  const live=enemies.filter(e=>!e.dead).length;HZ.spawnT-=dt;if(HZ.spawnT<=0&&live<lv.cap&&!CH.nozombies){HZ.spawnT=Math.max(0.15,1.2-SET.hordeLvl*0.18);hordeSpawn();}
+  updateCrowd(dt);
+  if(!HZ.tank&&HZ.kills>=lv.tank)spawnTank();
+  HZ.hudT-=dt;if(HZ.hudT<=0){HZ.hudT=0.25;const nd=$('nades');if(nd){const nxt=HZ.tank?'Goal '+lv.win:(()=>{const n=H_TIERS.find(t=>HZ.kills<t[0]*lv.tank);return n?'Next: '+n[2]+' at '+Math.ceil(n[0]*lv.tank):'Tank at '+lv.tank;})();nd.textContent='Kills '+HZ.kills.toLocaleString()+'  \u00b7  '+nxt+(P.tank?'  \u00b7  '+(P.tank.w==='hmg'?'HMG':'Cannon'):'');}}}
 /* ================= update ================= */
 function update(dt){
   const dead=P.dying>0;if(dead){P.dying+=dt;if(P.dying>2.1&&G.state==='play'){setState('over');}}
   heroBurn(dt);
-  const lock=dead||!!P.car||!!P.kd;const ax=lock?0:clamp(stickVec.x+(input.right?1:0)-(input.left?1:0),-1,1),fwd=lock?0:clamp(-stickVec.y+(input.up?1:0)-(input.down?1:0),-1,1);
+  const lock=dead||!!(P.car||P.tank)||!!P.kd;const ax=lock?0:clamp(stickVec.x+(input.right?1:0)-(input.left?1:0),-1,1),fwd=lock?0:clamp(-stickVec.y+(input.up?1:0)-(input.down?1:0),-1,1);
   P.turn=0;const maxS=(input.fire||P.aimT>0?2.0:3.6)*(CH.speed?1.7:1);P.sv=damp(P.sv||0,Math.abs(ax)>0.02?Math.sign(ax)*Math.pow(Math.abs(ax),1.3)*maxS:0,Math.abs(ax)>0.02?9:18,dt);if(Math.abs(ax)<0.02&&Math.abs(P.sv)<0.15)P.sv=0;
-  const aiming=P.aimT>0||input.fire;const hk=P.hp<35?0.8:1;const maxF=(aiming?2.2:5.4)*hk*(CH.speed?1.9:1),maxB=2.0*(CH.speed?1.6:1);P.sprintT=(fwd>0.9&&!aiming&&P.stance==='stand'&&!P.car)?(P.sprintT||0)+dt:0;const spr=P.sprintT>0.35;const stK=P.stance==='crouch'?0.42:P.stance==='prone'?0.16:1;
+  const aiming=P.aimT>0||input.fire;const hk=P.hp<35?0.8:1;const maxF=(aiming?2.2:5.4)*hk*(CH.speed?1.9:1),maxB=2.0*(CH.speed?1.6:1);P.sprintT=(fwd>0.9&&!aiming&&P.stance==='stand'&&!(P.car||P.tank))?(P.sprintT||0)+dt:0;const spr=P.sprintT>0.35;const stK=P.stance==='crouch'?0.42:P.stance==='prone'?0.16:1;
   const wading=DEADZONE&&Math.abs(P.x)<A&&Math.abs(P.z)<A&&P.y<0.5;
   let target=(fwd>0?fwd*(spr?7.2*(CH.speed?1.9:1)*hk:maxF):fwd*maxB)*stK;if(P.slideT>0){P.slideT-=dt;target=P.slideV*Math.max(0,P.slideT/0.75);}if(P.landT>0){P.landT-=dt;target*=0.4;}if(wading){target*=0.72;if(Math.abs(P.vel)+Math.abs(P.sv||0)>0.6){P.splT=(P.splT||0)-dt;if(P.splT<=0){P.splT=0.32;splash(P.x,P.z,1);}}}
   P.vel=damp(P.vel,target,Math.abs(fwd)>0.05?7:18,dt);if(Math.abs(fwd)<0.05&&Math.abs(P.vel)<0.15)P.vel=0;
@@ -2037,13 +2146,13 @@ function update(dt){
     P.roof=P.y>0.5?roofAt(P.x,P.z,P.y):-1;G.ladderHint=null;
     for(const L of ladders){if(P.roof===-1&&P.y<0.2){const d=Math.hypot(P.x-L.bx,P.z-L.bz);if(d<1.4){G.ladderHint='up';if(d<1.0&&fwd>0.5&&(fx*-L.nx+fz*-L.nz)>0.4){P.climb=L;P.y=0.01;P.climbInv=false;break;}}}
       else if(P.roof===L.roof){const d=Math.hypot(P.x-L.ex,P.z-L.ez);if(d<1.5){G.ladderHint='down';if(d<1.1&&fwd>0.5&&(fx*L.nx+fz*L.nz)>0.4){P.climb=L;P.y=L.y1-0.05;P.climbInv=true;break;}}}}}
-  const nc=!P.car&&nearDrivable();const pr=$('prompt');const ub=btnFor('use');const pt=P.car?'Left stick drives'+(ub?' \u00b7 '+ub+' gets out':''):nc?(ub?'Press '+ub+' to drive':'Walk up to drive'):P.climb?'Stick up or down to climb':G.ladderHint==='up'?'Push forward into the ladder to climb':G.ladderHint==='down'?'Walk off the edge at the ladder to climb down':'';if(pr.textContent!==pt)pr.textContent=pt;
+  const nc=!(P.car||P.tank)&&nearDrivable();const pr=$('prompt');const ub=btnFor('use');const pt=P.car?'Left stick drives'+(ub?' \u00b7 '+ub+' gets out':''):nc?(ub?'Press '+ub+' to drive':'Walk up to drive'):P.climb?'Stick up or down to climb':G.ladderHint==='up'?'Push forward into the ladder to climb':G.ladderHint==='down'?'Walk off the edge at the ladder to climb down':'';if(pr.textContent!==pt)pr.textContent=pt;
   P.runAmt=damp(P.runAmt,(P.vel>3&&!aiming)?1:0,7,dt);P.aimAmt=damp(P.aimAmt,aiming?1:0,12,dt);
   P.fireCD-=dt;P.aimT-=dt;P.recoil*=Math.exp(-dt*14);
   if(P.reloadT>0){P.reloadT-=dt;P.reloadAmt=damp(P.reloadAmt,1,10,dt);if(P.reloadT<=0){if(P.clearing){P.clearing=false;P.jam=false;P.reloadT=0;P.heat=0.3;showMsg('Cleared',0.6);}else{const W=GUNS[P.weapon];const take=Math.min(W.mag-P.ammo,P.reserve);P.ammo+=take;if(P.reserve!==Infinity)P.reserve-=take;P.reloadT=0;drawHud();}}}
   else P.reloadAmt=damp(P.reloadAmt,0,10,dt);
-  if(P.car)driveCar(dt);
-  if(!P.car&&!P.climb&&!dead){const cv=v=>Math.sign(v)*Math.pow(Math.abs(v),1.7);const fine=((P.ads||0)>0.5?0.55:1)/Math.sqrt(Math.max(1,(GUNS[P.weapon].zoom||1)*(P.ads||0)));
+  if(P.tank)driveTank(dt);else if(P.car)driveCar(dt);
+  if(!(P.car||P.tank)&&!P.climb&&!dead){const cv=v=>Math.sign(v)*Math.pow(Math.abs(v),1.7);const fine=((P.ads||0)>0.5?0.55:1)/Math.sqrt(Math.max(1,(GUNS[P.weapon].zoom||1)*(P.ads||0)));
     P.lookBoost=Math.abs(stickVec2.x)>0.92?Math.min(1,(P.lookBoost||0)+dt*1.8):Math.max(0,(P.lookBoost||0)-dt*4);
     const ty=cv(stickVec2.x)*(2.3+1.5*P.lookBoost)*fine,tp=cv(stickVec2.y)*1.5*fine*(SET.invertY?-1:1);
     const sx=SENS('sensX'),sy=SENS('sensY');const tyx=ty*sx,tpy=tp*sy;const held=Math.abs(stickVec2.x)+Math.abs(stickVec2.y)>0;
@@ -2052,14 +2161,14 @@ function update(dt){
     P.yaw-=P.lvx*dt+dyw;P.pitch=clamp(P.pitch-P.lvy*dt-dpt,-0.85,0.6);}else{P.lvx=0;P.lvy=0;P.pendYaw=0;P.pendPitch=0;}
   updateBreath(dt);stepNade(dt);updateNades(dt);P.throwT=Math.max(0,(P.throwT||0)-dt);
   if(input.fire&&P.jam&&!P.jamTold){P.jamTold=true;sfx.empty();}if(!input.fire)P.jamTold=false;
-  if(input.fire&&P.fireCD<=0&&P.reloadT<=0&&!P.climb&&!dead&&P.burn<=0&&!P.car&&!P.jam&&P.nadeT<0&&!P.kd){if(P.ammo>0)shoot();else if(!P.emptyLatch){P.emptyLatch=true;sfx.empty();if(!startReload())showMsg('Press A to reload',1.2);}}
+  if(input.fire&&P.fireCD<=0&&P.reloadT<=0&&!P.climb&&!dead&&P.burn<=0&&!(P.car||P.tank)&&!P.jam&&P.nadeT<0&&!P.kd){if(P.ammo>0)shoot();else if(!P.emptyLatch){P.emptyLatch=true;sfx.empty();if(!startReload())showMsg('Press A to reload',1.2);}}
   if(!input.fire)P.emptyLatch=false;
   hud.ring.classList.toggle('on',P.reloadT>0);if(P.reloadT>0)hud.arc.setAttribute('stroke-dashoffset',(62.8*(P.reloadT/P.reloadMax)).toFixed(1));
   updatePickups(dt);
   {let nd=99;for(const e of enemies)if(!e.dead)nd=Math.min(nd,Math.hypot(e.x-P.x,e.z-P.z));EMO.nearest=nd;
    EMO.arousal=damp(EMO.arousal,Math.max(0.15,clamp(1-nd/10,0,1)*0.85),0.6,dt);EMO.valence=damp(EMO.valence,0,0.12,dt);EMO.hurtT-=dt;VOICE.cd-=dt;VOICE.talkT-=dt;
    P.quietT=nd>14?(P.quietT||0)+dt:0;if(P.quietT>12){P.quietT=0;say('quiet',0.6);}}
-  if(G.toSpawn>0){G.spawnT-=dt;if(G.spawnT<=0&&!CH.nozombies&&enemies.filter(e=>!e.dead).length<(SET.hi?16:12)){spawnEnemy();G.toSpawn--;G.spawnT=Math.max(0.6,1.6-G.wave*0.07);}}
+  if(HORDE){updateHorde(dt);}else if(G.toSpawn>0){G.spawnT-=dt;if(G.spawnT<=0&&!CH.nozombies&&enemies.filter(e=>!e.dead).length<(SET.hi?16:12)){spawnEnemy();G.toSpawn--;G.spawnT=Math.max(0.6,1.6-G.wave*0.07);}}
   else if(enemies.every(e=>e.dead)){if(G.between<=0){G.between=3.2;if(G.wave>0){showMsg('Wave '+G.wave+' cleared',2);emote(0.3,-0.2);say('clear',0.7);}}
     else{G.between-=dt;if(G.between<=0){if(G.wave>0)P.hp=Math.min(P.maxHp||100,P.hp+20);startWave(G.wave+1);}}}
   (dt=>{for(let i=enemies.length-1;i>=0;i--){const e=enemies[i];
@@ -2079,7 +2188,7 @@ function update(dt){
   if(G.state==='play')G.roundT=(G.roundT||0)+dt;
   G.slotT=(G.slotT||0)-dt;if(G.slotT<=0){G.slotT=0.25;assignSlots();updateStealth();}
 }
-function hurtPlayer(n){if(P.dying||CH.god)return;if(P.car){n*=0.3;P.car.hp-=n;}P.hp-=n;G.shake=0.18;sfx.hurt();buzz(45);emote(-0.35,0.35);EMO.hurtT=0.45;if(P.hp<35&&P.hp>0&&!EMO.lowWarned){EMO.lowWarned=true;say('low',1,true);}else say('hurt',0.4);hud.vig.style.transition='none';hud.vig.style.opacity=1;
+function hurtPlayer(n){if(P.dying||CH.god||P.tank)return;if(P.car){n*=0.3;P.car.hp-=n;}P.hp-=n;G.shake=0.18;sfx.hurt();buzz(45);emote(-0.35,0.35);EMO.hurtT=0.45;if(P.hp<35&&P.hp>0&&!EMO.lowWarned){EMO.lowWarned=true;say('low',1,true);}else say('hurt',0.4);hud.vig.style.transition='none';hud.vig.style.opacity=1;
   requestAnimationFrame(()=>{hud.vig.style.transition='opacity .5s';hud.vig.style.opacity=P.hp<30?0.5:0;});drawHud();
   if(P.hp<=0&&!P.dying){P.hp=0;drawHud();heroDie();}}
 
@@ -2116,6 +2225,7 @@ function updateCamera(dt){
   if(P.kd&&G.state==='play'){updateKnock(dt);}
   if(G.killcam&&G.killcam.e){const e=G.killcam.e;const vx=e.x-P.x,vz=e.z-P.z,L=Math.hypot(vx,vz)||1;const a=Math.atan2(vx,vz)+1.2;
     const px=e.x+Math.sin(a)*2.7,pz=e.z+Math.cos(a)*2.7;camera.position.set(px,e.y+1.25,pz);camera.lookAt(e.x,e.y+0.8,e.z);camera.fov=40;camera.updateProjectionMatrix();hero.root.visible=true;VM.visible=false;return;}
+  if(P.tank){tankCamera(dt);return;}
   if(P.car){const c=P.car,fx=-Math.sin(c.ry),fz=-Math.cos(c.ry);const tx=c.x-fx*7.5,tz=c.z-fz*7.5;camPos.x=damp(camPos.x,tx,6,dt);camPos.z=damp(camPos.z,tz,6,dt);camPos.y=damp(camPos.y,3.2,6,dt);
     camera.position.copy(camPos);if(G.shake>0){camera.position.x+=(Math.random()-.5)*G.shake;camera.position.y+=(Math.random()-.5)*G.shake;G.shake=Math.max(0,G.shake-dt*0.8);}
     camera.lookAt(c.x+fx*6,1.0,c.z+fz*6);camera.fov=damp(camera.fov,(60+Math.abs(c.speed)*0.6)*FOVK(),4,dt);camera.updateProjectionMatrix();hero.root.visible=true;VM.visible=false;return;}
@@ -2135,7 +2245,7 @@ function updateCamera(dt){
   if(G.shake>0){camera.position.x+=(Math.random()-.5)*G.shake;camera.position.y+=(Math.random()-.5)*G.shake;G.shake=Math.max(0,G.shake-dt*0.8);}
   const kp=P.pitch+(P.kick||0),ky=P.yaw+(P.kickYaw||0);const kpc=Math.cos(kp),kps=Math.sin(kp),kfx=-Math.sin(ky),kfz=-Math.cos(ky);
   camLook.set(P.x+rx*ox*0.95+kfx*kpc*14,P.y+1.45+kps*14,P.z+rz*ox*0.95+kfz*kpc*14);
-  const want=(((input.fire&&!P.jam)||P.adsHold||SET.view==='first')&&P.nadeT<0&&!P.climb&&P.burn<=0&&!P.dying&&!P.car&&!P.kd&&G.state==='play')?1:0;P.fpv=damp(P.fpv||0,want,want?16:9,dt);
+  const want=(((input.fire&&!P.jam)||P.adsHold||SET.view==='first')&&P.nadeT<0&&!P.climb&&P.burn<=0&&!P.dying&&!(P.car||P.tank)&&!P.kd&&G.state==='play')?1:0;P.fpv=damp(P.fpv||0,want,want?16:9,dt);
   if(P.fpv>0.01){hero.head.getWorldPosition(_hv);const ex=_hv.x+fx*0.16,ey=_hv.y+0.11,ez=_hv.z+fz*0.16;const f=P.fpv*P.fpv*(3-2*P.fpv);
     camera.position.lerp(_ch.set(ex,ey,ez),f);camLook.lerp(_cv.set(ex+kfx*kpc*14,ey+kps*14,ez+kfz*kpc*14),f);}
   camera.lookAt(camLook);camera.rotateZ(Math.sin(P.phase)*0.01*run*(1-P.fpv));
@@ -2398,7 +2508,8 @@ function adjStep(k,d){SET[k]=clamp((SET[k]||3)+d,1,5);saveSet();tone(500+SET[k]*
 function adjSlider(k,d){SET[k]=clamp(Math.round(((SET[k]??1)+d)*10)/10,0,1);saveSet();applyVolumes();tone(500+SET[k]*500,500+SET[k]*500,0.05,0.1,'triangle');buildMenu();}
 function toMenu(){if(P.car)exitCar();allyRig.root.visible=false;ALLY.alive=false;P.light=false;if(hero.flames)setFlames(hero,0);heroMat.userData.bu.burn.value=0;heroMat.userData.bu.hot.value=0;heroMat.userData.bu.melt.value=0;hero.root.rotation.x=0;enemies.slice().forEach(removeEnemy);pickups.slice().forEach(removePickup);resetBarrels();titleZ.root.visible=true;Object.assign(P,{x:0,z:8,y:0,vy:0,roof:-1,climb:null,pitch:0,yaw:0,vel:0,hp:100,dying:0,burn:0,char:0});G.wave=0;G.titleT=0;equip('rifle');drawHud();setState('title');}
 function buildMenu(){const s=G.state;let it=[];
-  if(s==='title')it=[['Survive the Bombies',()=>toggleLoadout(true)],['Map: '+(MAP==='park'?'Wash Park':'Parking garage'),()=>{SET.map=MAP==='park'?'garage':'park';saveSet();showMsg('Loading map\u2026',3);setTimeout(()=>location.reload(),150);}],['Mode: '+(SET.mode==='deadzone'?'Dead Zone':'Survival'),()=>{SET.mode=SET.mode==='deadzone'?'survival':'deadzone';if(SET.mode==='deadzone')SET.map='garage';saveSet();showMsg('Loading\u2026',3);setTimeout(()=>location.reload(),150);}],['Alley Shot',startAlley],['Settings',()=>{G.setBack='title';setState('settings');}]];
+  if(s==='title')it=[['Survive the Bombies',()=>toggleLoadout(true)],['Map: '+(MAP==='park'?'Wash Park':'Parking garage'),()=>{SET.map=MAP==='park'?'garage':'park';saveSet();showMsg('Loading map\u2026',3);setTimeout(()=>location.reload(),150);}],['Mode: '+({deadzone:'Dead Zone',horde:'Horde'}[SET.mode]||'Survival'),()=>{const o=['survival','deadzone','horde'];SET.mode=o[(o.indexOf(SET.mode||'survival')+1)%3];if(SET.mode==='deadzone')SET.map='garage';if(SET.mode==='horde')SET.map='park';saveSet();showMsg('Loading\u2026',3);setTimeout(()=>location.reload(),150);}],
+    ...(HORDE?[['Difficulty: '+HORDE_LV[clamp(SET.hordeLvl|0,0,5)].name,()=>{SET.hordeLvl=((SET.hordeLvl|0)+1)%6;saveSet();buildMenu();}]]:[]),['Alley Shot',startAlley],['Settings',()=>{G.setBack='title';setState('settings');}]];
   if(false)it=[['Graphics: '+(SET.hi?'high':'smooth'),()=>{SET.hi=!SET.hi;saveSet();applySet();buildMenu();}],
     ['Voice: '+(SET.voice?'on':'off'),()=>{SET.voice=!SET.voice;saveSet();buildMenu();}],['Weather: '+(SET.weather||'rain'),()=>{const o=['clear','rain','storm'];SET.weather=o[(o.indexOf(SET.weather||'rain')+1)%3];saveSet();applyWeather();buildMenu();}]];
   else if(s==='paused')it=[['Resume',()=>setState('play')],['Settings',()=>{G.setBack='paused';setState('settings');}],['Quit to menu',toMenu]];
@@ -2542,7 +2653,7 @@ function updateLights(dt){
   const out=G.state==='play'?clamp((G.wave-3)/3,0,1):0;LIGHTS.forEach((L,i)=>{const dead=(i+1)/LIGHTS.length<=out;L.intensity=dead?(Math.random()<0.02?0.6:0):LBASE[i]*(out>0&&Math.random()<0.03*out?0.2:1);});
   G.dark=out>0.6&&!P.light;tubeMat.color.setRGB(2.6*(1-out*0.85),2.7*(1-out*0.85),2.8*(1-out*0.85));if(out>0.6)flick.intensity*=0.2;
   if(G.state==='play'&&G.wave===4&&!G.powerMsg){G.powerMsg=true;showMsg('The power is failing. Tap Select for your flashlight',2.6);}
-  const on=P.light&&!P.car&&G.state!=='title';flashSpot.intensity=on?2.6:0;beam.visible=on&&P.fpv<0.5;
+  const on=P.light&&!(P.car||P.tank)&&G.state!=='title';flashSpot.intensity=on?2.6:0;beam.visible=on&&P.fpv<0.5;
   if(on){const m=P.fpv>0.5?vmMuzzle:hero.muzzle;m.getWorldPosition(_a);camera.getWorldDirection(_b);flashSpot.position.copy(_a);flashT.position.copy(_a).addScaledVector(_b,10);
     beam.position.copy(_a);beam.lookAt(_a.clone().add(_b));}}
 /* ================= grenades ================= */
@@ -2597,7 +2708,7 @@ function drawAlly(){const f=$('allyfill');if(f){f.style.width=Math.max(0,ALLY.hp
 function hurtAlly(n){if(!ALLY.alive)return;ALLY.hp-=n;drawAlly();if(ALLY.hp<=0){ALLY.alive=false;ALLY.dead=0.001;showMsg('Your survivor is down!',2);tone(300,120,0.6,0.2,'sawtooth');}}
 function updateAlly(dt){const r=allyRig;if(!r.root.visible)return;
   if(!ALLY.alive){ALLY.dead+=dt;r.root.rotation.x=Math.min(1.42,ALLY.dead*ALLY.dead*3);r.root.position.set(ALLY.x,0,ALLY.z);return;}
-  const hidden=!!P.car;r.root.visible=!hidden;if(hidden){ALLY.x=P.x+1.5;ALLY.z=P.z+1.5;return;}
+  const hidden=!!(P.car||P.tank);r.root.visible=!hidden;if(hidden){ALLY.x=P.x+1.5;ALLY.z=P.z+1.5;return;}
   let target=null,bd=18;for(const e of enemies){if(e.dead||e.y>0.5)continue;const d=Math.hypot(e.x-ALLY.x,e.z-ALLY.z);if(d<bd&&losClear(ALLY.x,ALLY.z,e.x,e.z)){bd=d;target=e;}}
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
   const gx=P.roof>=0||P.climb?ALLY.x:P.x-fx*2.4+rx*1.6,gz=P.roof>=0||P.climb?ALLY.z:P.z-fz*2.4+rz*1.6;const dd=Math.hypot(gx-ALLY.x,gz-ALLY.z);
@@ -2674,7 +2785,7 @@ function loStart(){LOUI.open=false;$('loadout').classList.remove('on');resetGame
 function applyLoadout(){resetInv();
   if(LO.secondary==='magnum')INV.magnum={own:true,ammo:GUNS.magnum.mag,reserve:GUNS.magnum.reserve};
   if(LO.primary==='rpg'){INV.rpg={own:true,ammo:1,reserve:GUNS.rpg.reserve};equip('rpg');P.ammo=1;P.reserve=INV.rpg.reserve;}else if(LO.primary==='shotgun'){INV.shotgun={own:true,ammo:GUNS.shotgun.mag,reserve:GUNS.shotgun.reserve*2};equip('shotgun');P.ammo=INV.shotgun.ammo;P.reserve=INV.shotgun.reserve;}else equip('rifle');
-  P.maxHp=LO.perk==='medic'?125:100;P.hp=P.maxHp;P.reloadK=LO.perk==='hands'?0.65:1;P.steady=LO.perk==='steady';G.nadeKind=DEADZONE?'toxic':LO.lethal;P.traps=DEADZONE?{mine:4,snare:4}:{mine:2,snare:2};P.trapType=P.trapType||'mine';TRAPS.slice().forEach(removeTrap);GAS.slice().forEach(g=>{g.t=0;});drawHud();}
+  P.maxHp=LO.perk==='medic'?125:100;P.hp=P.maxHp;P.reloadK=LO.perk==='hands'?0.65:1;P.steady=LO.perk==='steady';if(HORDE)setTimeout(hordeReset,0);G.nadeKind=DEADZONE?'toxic':LO.lethal;P.traps=DEADZONE?{mine:4,snare:4}:{mine:2,snare:2};P.trapType=P.trapType||'mine';TRAPS.slice().forEach(removeTrap);GAS.slice().forEach(g=>{g.t=0;});drawHud();}
 function updateLoadoutInput(dt){const y=clamp(-stickVec.y+(input.up?1:0)-(input.down?1:0),-1,1),x=clamp(stickVec.x+(input.right?1:0)-(input.left?1:0),-1,1);LOUI.rep-=dt;
   if(Math.abs(y)<0.4&&Math.abs(x)<0.4){LOUI.rep=0;return;}if(LOUI.rep>0)return;LOUI.rep=0.28;
   const n=loRows();if(Math.abs(y)>=Math.abs(x)){LOUI.sel=(LOUI.sel+(y>0?-1:1)+n+2)%(n+2);tone(700,700,0.03,0.06,'square');buildLoadout();}
@@ -2976,9 +3087,9 @@ const BMAP=(()=>{try{return Object.assign({},MAP_DEFAULT,JSON.parse(localStorage
 function saveBmap(){try{localStorage.setItem('sb-bmap',JSON.stringify(BMAP));}catch(e){}refreshMapLabels();}
 const ACT_SHORT={trap:'Trap',traptype:'Trap type',jump:'Jump',crouch:'Crouch',shoot:'Shoot',reload:'Reload',grenade:'Grenade',use:'Use',aim:'Aim',light:'Light',shoulder:'Shoulder',prev:'Prev',next:'Next',none:'\u2014'};
 function refreshMapLabels(){for(const k in BMAP){const el=$(k);if(el)el.setAttribute('data-map',ACT_SHORT[BMAP[k]]||'');}}
-function doAction(act,down,hold){if(act==='shoot'){input.fire=down;return;}if(act==='aim'&&hold){P.adsHold=down;return;}if(!down)return;
+function doAction(act,down,hold){if(P.tank&&down&&(act==='traptype'||act==='next'||act==='prev'||act==='grenade'||act==='reload')){switchTankGun();return;}if(P.tank&&act==='shoot'){input.fire=down;return;}if(P.tank&&act!=='use')return;if(act==='shoot'){input.fire=down;return;}if(act==='aim'&&hold){P.adsHold=down;return;}if(!down)return;
   if(act==='trap'){placeTrap();return;}if(act==='traptype'){switchTrap();return;}
-  if(act==='reload')pressReload();else if(act==='grenade')throwNade();else if(act==='use'){if(P.car)exitCar();else{const c=nearDrivable();if(c)enterCar(c);else heroJump();}}
+  if(act==='reload')pressReload();else if(act==='grenade')throwNade();else if(act==='use'){if(P.tank)exitTank();else if(HORDE&&nearTank())enterTank();else if(P.car)exitCar();else{const c=nearDrivable();if(c)enterCar(c);else heroJump();}}
   else if(act==='jump')heroJump();else if(act==='crouch')heroCrouch();
   else if(act==='aim'){P.adsHold=!P.adsHold;tone(P.adsHold?900:700,P.adsHold?1100:600,0.03,0.08,'square');}else if(act==='light')toggleLight();else if(act==='shoulder')pressSelect();else if(act==='prev')cycleWeapon(-1);else if(act==='next')cycleWeapon(1);}
 const MENU_BTN={bL1:()=>menuMove(-1),bR1:()=>menuMove(1),gL2:()=>{},gR2:()=>menuActivate(),bB:()=>menuActivate(),bA:()=>menuActivate(),bX:()=>menuMove(-1),bY:()=>{if(G.state==='title')toggleLoadout();else menuActivate();},dU:()=>menuMove(-1),dD:()=>menuMove(1),dL:()=>{},dR:()=>{},bSel:()=>{}};
