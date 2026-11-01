@@ -1354,7 +1354,21 @@ const ZLOOKS=[
   {skin:[0.7,0.68,0.6],hair:[0.3,0.22,0.15],longHair:3.6,female:true,dress:[0.36,0.25,0.19],shirt:{kind:'tee',base:[0.36,0.25,0.19]},pants:[0.15,0.13,0.12],shoes:[0.18,0.14,0.1],sleeves:'long'},
   {skin:[0.72,0.7,0.62],hair:[0.56,0.48,0.33],longHair:3.2,female:true,shirt:{kind:'tee',base:[0.44,0.41,0.37]},pants:[0.32,0.3,0.22],shoes:[0.26,0.22,0.18],sleeves:'long'},
   {skin:[0.64,0.66,0.6],hair:[0.52,0.5,0.47],longHair:2.4,shirt:{kind:'tee',base:[0.26,0.23,0.2]},jacket:[0.45,0.2,0.15],jacketKind:'plaid',pants:[0.26,0.23,0.19],shoes:[0.12,0.1,0.08],sleeves:'long'},
-  {skin:[0.66,0.64,0.56],hair:[0.2,0.18,0.15],bald:true,shirt:{kind:'tee',base:[0.4,0.38,0.33]},jacket:[0.3,0.28,0.26],pants:[0.19,0.18,0.18],shoes:[0.1,0.09,0.08],sleeves:'long'}];
+  {skin:[0.66,0.64,0.56],hair:[0.2,0.18,0.15],bald:true,shirt:{kind:'tee',base:[0.4,0.38,0.33]},jacket:[0.3,0.28,0.26],pants:[0.19,0.18,0.18],shoes:[0.1,0.09,0.08],sleeves:'long'},
+  // hospital patient in a pale gown
+  {skin:[0.74,0.72,0.66],hair:[0.2,0.18,0.15],bald:true,shirt:{kind:'tee',base:[0.58,0.68,0.74]},pants:[0.56,0.66,0.72],shoes:[0.82,0.82,0.8],sleeves:'short'},
+  // construction worker in hi-vis orange
+  {skin:[0.62,0.6,0.5],hair:[0.18,0.14,0.1],shirt:{kind:'tee',base:[0.88,0.46,0.08]},pants:[0.18,0.24,0.38],shoes:[0.3,0.2,0.1],sleeves:'short'},
+  // nurse in teal scrubs
+  {skin:[0.68,0.64,0.58],hair:[0.1,0.08,0.07],longHair:2.2,female:true,shirt:{kind:'tee',base:[0.16,0.48,0.48]},pants:[0.15,0.45,0.45],shoes:[0.85,0.85,0.83],sleeves:'short'},
+  // businessman in a dark suit and white shirt
+  {skin:[0.66,0.64,0.58],hair:[0.25,0.2,0.16],recede:1.4,shirt:{kind:'tee',base:[0.82,0.82,0.78]},jacket:[0.11,0.11,0.13],pants:[0.12,0.12,0.14],shoes:[0.04,0.04,0.04],sleeves:'long'},
+  // police officer in navy
+  {skin:[0.58,0.52,0.44],hair:[0.08,0.07,0.06],shirt:{kind:'tee',base:[0.1,0.14,0.3]},pants:[0.08,0.1,0.2],shoes:[0.03,0.03,0.03],sleeves:'long'},
+  // firefighter in tan turnout gear
+  {skin:[0.64,0.62,0.54],hair:[0.32,0.22,0.12],shirt:{kind:'tee',base:[0.16,0.15,0.14]},jacket:[0.62,0.5,0.26],pants:[0.56,0.46,0.24],shoes:[0.05,0.05,0.05],sleeves:'long'},
+  // jogger in a red top
+  {skin:[0.72,0.68,0.6],hair:[0.72,0.6,0.38],longHair:3.0,female:true,shirt:{kind:'tee',base:[0.76,0.12,0.14]},pants:[0.06,0.06,0.07],shoes:[0.88,0.88,0.88],sleeves:'short'}];
 
 const zGeoCache=[];
 function zGeos(i){if(!zGeoCache[i])zGeoCache[i]=buildBodyGeos(Object.assign({age:0.6,zombie:true,seed:i*7+3,iris:[0.62,0.66,0.66],poseR:'claw',poseL:'claw'},ZLOOKS[i]));return zGeoCache[i];}
@@ -2036,15 +2050,19 @@ function hordeTierUp(){const lv=HLV(),f=HZ.kills/lv.tank;let t=0;for(let i=0;i<H
   if(k==='rpg'){GUNS.rpg.cd=0.32;GUNS.rpg.reload=0.01;}
   if(P.weapon!==k&&!P.tank){P.weapon=k;equip(k);}if(t>0){showMsg('WEAPON UPGRADE: '+label,2.2);tone(500,1100,0.25,0.18,'sawtooth');}}
 /* ----- the crowd: a sea of far-away Bombies drawn in one go ----- */
-function crowdGeo(){const sk=[0.42,0.47,0.38],cl=[0.32,0.33,0.36],dk=[0.12,0.12,0.13];
-  return mergeParts([P_(new THREE.BoxGeometry(0.46,0.62,0.26),M(0,1.12,0),cl),P_(new THREE.BoxGeometry(0.24,0.28,0.24),M(0,1.62,-0.04),sk),
-    P_(new THREE.BoxGeometry(0.17,0.78,0.2),M(-0.12,0.42,0),dk),P_(new THREE.BoxGeometry(0.17,0.78,0.2),M(0.12,0.42,0),dk),
-    P_(new THREE.BoxGeometry(0.11,0.11,0.6),M(-0.3,1.3,-0.26),sk),P_(new THREE.BoxGeometry(0.11,0.11,0.6),M(0.3,1.32,-0.26),sk)]);}
-function buildCrowd(){if(HZ.crowd){scene.remove(HZ.crowd);HZ.crowd=null;}HZ.inst=[];if(!HORDE)return;const n=HLV().crowd;if(!n)return;
-  const mesh=new THREE.InstancedMesh(crowdGeo(),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}),n);mesh.frustumCulled=false;mesh.castShadow=false;
-  HZ.dir=Math.random()*Math.PI*2;const c=new THREE.Color();
-  for(let i=0;i<n;i++){const it={ph:Math.random()*6.28,sp:0.75+Math.random()*0.5};crowdPlace(it,true);HZ.inst.push(it);c.setHSL(0.18+Math.random()*0.1,0.12,0.45+Math.random()*0.35);mesh.setColorAt(i,c);}
-  scene.add(mesh);HZ.crowd=mesh;}
+const CROWD_KITS=[[[0.42,0.47,0.38],[0.32,0.37,0.48],[0.2,0.24,0.32]],[[0.45,0.44,0.36],[0.42,0.3,0.24],[0.36,0.33,0.26]],[[0.5,0.48,0.42],[0.36,0.25,0.19],[0.15,0.13,0.12]],
+  [[0.52,0.5,0.44],[0.58,0.68,0.74],[0.56,0.66,0.72]],[[0.4,0.39,0.32],[0.88,0.46,0.08],[0.18,0.24,0.38]],[[0.46,0.43,0.38],[0.16,0.48,0.48],[0.15,0.45,0.45]],
+  [[0.45,0.44,0.38],[0.11,0.11,0.13],[0.12,0.12,0.14]],[[0.38,0.34,0.28],[0.1,0.14,0.3],[0.08,0.1,0.2]],[[0.42,0.41,0.35],[0.62,0.5,0.26],[0.56,0.46,0.24]],[[0.5,0.47,0.41],[0.76,0.12,0.14],[0.06,0.06,0.07]]];
+function crowdGeo(k){const [sk,cl,pa]=CROWD_KITS[k],hr=[0.1,0.09,0.08];
+  return mergeParts([P_(new THREE.BoxGeometry(0.46,0.6,0.26),M(0,1.1,-0.05,0.25,0,0),cl),P_(new THREE.BoxGeometry(0.22,0.26,0.24),M(0,1.5,-0.24,0.35,0,0),sk),P_(new THREE.BoxGeometry(0.23,0.08,0.25),M(0,1.64,-0.26,0.35,0,0),hr),
+    P_(new THREE.BoxGeometry(0.17,0.8,0.2),M(-0.12,0.42,0,0.08,0,0),pa),P_(new THREE.BoxGeometry(0.17,0.8,0.2),M(0.12,0.42,0.05,-0.12,0,0),pa),
+    P_(new THREE.BoxGeometry(0.1,0.1,0.55),M(-0.28,1.2,-0.38,0.25,0,0),sk),P_(new THREE.BoxGeometry(0.1,0.1,0.55),M(0.28,1.26,-0.36,0.1,0,0),sk),
+    P_(new THREE.BoxGeometry(0.12,0.12,0.28),M(-0.28,1.27,-0.18),cl),P_(new THREE.BoxGeometry(0.12,0.12,0.28),M(0.28,1.3,-0.16),cl)]);}
+function buildCrowd(){if(HZ.crowds)HZ.crowds.forEach(m=>scene.remove(m));HZ.crowds=[];HZ.crowd=null;HZ.inst=[];if(!HORDE)return;const n=HLV().crowd;if(!n)return;
+  HZ.dir=Math.random()*Math.PI*2;const per=Math.ceil(n/10),mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:1});
+  for(let k=0;k<10;k++){const cnt=Math.min(per,n-k*per);if(cnt<=0)break;const mesh=new THREE.InstancedMesh(crowdGeo(k),mat,cnt);mesh.frustumCulled=false;
+    for(let i=0;i<cnt;i++){const it={ph:Math.random()*6.28,sp:0.75+Math.random()*0.5,m:mesh,i};crowdPlace(it,true);HZ.inst.push(it);}scene.add(mesh);HZ.crowds.push(mesh);}
+  HZ.crowd=HZ.crowds[0];}
 function crowdPlace(it,init){const a=HZ.dir+(Math.random()-.5)*(init?2.2:1.6),r=(init?40:70)+Math.random()*(init?60:35);it.x=P.x+Math.sin(a)*r;it.z=P.z+Math.cos(a)*r;}
 const _cm=new THREE.Matrix4(),_cq=new THREE.Quaternion(),_cs=new THREE.Vector3(1,1,1),_cp=new THREE.Vector3(),_ce=new THREE.Euler();
 function updateCrowd(dt){const m=HZ.crowd;if(!m)return;const lv=HLV();const live=enemies.filter(e=>!e.dead).length;
@@ -2053,8 +2071,8 @@ function updateCrowd(dt){const m=HZ.crowd;if(!m)return;const lv=HLV();const live
   for(let i=0;i<HZ.inst.length;i++){const it=HZ.inst[i];const dx=P.x-it.x,dz=P.z-it.z,d=Math.hypot(dx,dz)||1;const v=lv.cs*it.sp*dt;
     it.x+=dx/d*v+Math.sin(it.ph*0.7)*0.3*dt;it.z+=dz/d*v+Math.cos(it.ph*0.6)*0.3*dt;it.ph+=dt*(2+lv.cs);
     if(d<17){if(live<lv.cap&&Math.random()<0.5)hordeSpawn(it.x,it.z);crowdPlace(it,false);}
-    _cp.set(it.x,Math.abs(Math.sin(it.ph))*0.08,it.z);_ce.set(0,Math.atan2(dx,dz)+Math.PI,Math.sin(it.ph)*0.1);_cq.setFromEuler(_ce);_cm.compose(_cp,_cq,_cs);m.setMatrixAt(i,_cm);}
-  m.instanceMatrix.needsUpdate=true;}
+    _cp.set(it.x,Math.abs(Math.sin(it.ph))*0.08,it.z);_ce.set(0,Math.atan2(dx,dz)+Math.PI,Math.sin(it.ph)*0.1);_cq.setFromEuler(_ce);_cm.compose(_cp,_cq,_cs);it.m.setMatrixAt(it.i,_cm);}
+  for(const mm of HZ.crowds)mm.instanceMatrix.needsUpdate=true;}
 function crowdKill(x,z,r){let n=0;for(const it of HZ.inst){if(Math.hypot(it.x-x,it.z-z)<r){if(n<6)spark(new THREE.Vector3(it.x,1,it.z),0x7a1010,0.5);crowdPlace(it,false);n++;}}if(n)hordeCount(n);return n;}
 function crowdRay(o,d,len,w){let n=0;for(const it of HZ.inst){const vx=it.x-o.x,vz=it.z-o.z;const t=vx*d.x+vz*d.z;if(t<0||t>len)continue;const px=vx-d.x*t,pz=vz-d.z*t;if(px*px+pz*pz<w*w){crowdPlace(it,false);n++;if(n>2)break;}}if(n)hordeCount(n);return n;}
 /* ----- spawning the up-close Bombies ----- */
@@ -2513,15 +2531,14 @@ function buildMenu(){const s=G.state;let it=[];
   if(false)it=[['Graphics: '+(SET.hi?'high':'smooth'),()=>{SET.hi=!SET.hi;saveSet();applySet();buildMenu();}],
     ['Voice: '+(SET.voice?'on':'off'),()=>{SET.voice=!SET.voice;saveSet();buildMenu();}],['Weather: '+(SET.weather||'rain'),()=>{const o=['clear','rain','storm'];SET.weather=o[(o.indexOf(SET.weather||'rain')+1)%3];saveSet();applyWeather();buildMenu();}]];
   else if(s==='paused')it=[['Resume',()=>setState('play')],['Settings',()=>{G.setBack='paused';setState('settings');}],['Quit to menu',toMenu]];
-  else if(s==='controls')it=[['Drift',null,undefined,{slider:'drift',steps:5}],['Invert look',()=>{SET.invertY=!SET.invertY;saveSet();buildMenu();},!!SET.invertY],
+  else if(s==='controls')it=[['Drift',null,undefined,{slider:'drift',steps:5}],
     ['Look sensitivity X',null,undefined,{slider:'sensX',steps:5}],['Look sensitivity Y',null,undefined,{slider:'sensY',steps:5}],['Controller map \u203a',()=>setState('mapping')],
     ['Bluetooth controller: '+(SET.gp===false?'Off':'On'),()=>{SET.gp=SET.gp===false?true:false;saveSet();buildMenu();}],
     ['Controller: '+(()=>{if(SET.gp===false)return 'off';const L=gpList();if(SET.gpId){const f=L.find(p=>p.id===SET.gpId);return f?gpName(f.id):'not connected';}return L.length?'Auto \u00b7 '+gpName(L[0].id):'none found';})(),()=>{const L=gpList();const ids=[null,...L.map(p=>p.id)];const i=ids.indexOf(SET.gpId||null);SET.gpId=ids[(i+1)%ids.length];saveSet();buildMenu();}],
     ['Right stick axes: '+({auto:'Auto','23':'2 + 3','34':'3 + 4','25':'2 + 5'}[SET.rsAxes||'auto']),()=>{const o=['auto','23','34','25'];SET.rsAxes=o[(o.indexOf(SET.rsAxes||'auto')+1)%4];saveSet();buildMenu();}],
     ['Pairing help',()=>showMsg('Pair it in Bluetooth settings, then press any button on it',3.5)],
-    ['Controller layout: '+({auto:'Auto',overlay:'Over the game',below:'Below the game'}[SET.padLayout||'auto']),()=>{const o=['auto','overlay','below'];SET.padLayout=o[(o.indexOf(SET.padLayout||'auto')+1)%3];saveSet();applyLayout();buildMenu();}],
     ['Recommended settings',()=>{Object.assign(SET,{drift:3,sensX:3,sensY:3,invertY:false});saveSet();buildMenu();showMsg('Controls reset',0.8);}],['Back',()=>setState('settings')]];
-  else if(s==='mapping'){it=Object.keys(BTN_NAMES).map(k=>[BTN_NAMES[k],()=>{const ks=Object.keys(ACTIONS);BMAP[k]=ks[(ks.indexOf(BMAP[k])+1)%ks.length];saveBmap();buildMenu();},undefined,{pick:k}]);it.push(['Reset to default',()=>{Object.assign(BMAP,MAP_DEFAULT);saveBmap();buildMenu();}],['Back',()=>setState('controls')]);}
+  else if(s==='mapping'){it=Object.keys(BTN_NAMES).map(k=>[BTN_NAMES[k],()=>{const ks=Object.keys(ACTIONS);BMAP[k]=ks[(ks.indexOf(BMAP[k])+1)%ks.length];saveBmap();buildMenu();},undefined,{pick:k}]);it.push(['Invert look',()=>{SET.invertY=!SET.invertY;saveSet();buildMenu();},!!SET.invertY]);it.push(['Reset to default',()=>{Object.assign(BMAP,MAP_DEFAULT);saveBmap();buildMenu();}],['Back',()=>setState('controls')]);}
   else if(s==='graphics')it=[['Quality: '+({smooth:'Smooth',high:'High',ultra:'Ultra'}[SET.quality]),()=>{const o=['smooth','high','ultra'];SET.quality=o[(o.indexOf(SET.quality)+1)%3];SET.hi=SET.quality!=='smooth';saveSet();applySet();buildMenu();}],
     ['Field of view',null,undefined,{range:'fov',min:80,max:120,step:5}],
     ['View: '+(SET.view==='first'?'First person':'Third person'),()=>{SET.view=SET.view==='first'?'third':'first';saveSet();buildMenu();}],
@@ -2897,7 +2914,7 @@ function updateWarhead(){const vis=P.weapon!=='rpg'||P.ammo>0||(P.reloadT>0&&P.r
 function updateModGlow(){updateWarhead();const on=G.state==='loadout'&&LOUI.att;HL_MAT.opacity=0.32+0.18*Math.sin(performance.now()*0.005);HL_MAT.color.setHex(0xffa83a);
   if(stageGun){const hl=stageGun.userData.gun.userData.hl||{};const cat=on&&stageK&&LOUI.sel<(ATT_OPTS[stageK]||[]).length?ATT_OPTS[stageK][LOUI.sel][0]:null;for(const c in hl)hl[c].visible=c===cat;}
   for(const k in hero.gunMeshes){const hl=hero.gunMeshes[k].userData.hl||{};const cat=on&&k===LOUI.att&&LOUI.sel<ATT_OPTS[k].length?ATT_OPTS[k][LOUI.sel][0]:null;for(const c in hl)hl[c].visible=c===cat;}}
-function applyLayout(){const m=SET.padLayout||'auto';const desk=innerWidth/innerHeight>1.15&&innerWidth>=820;const ov=m==='overlay'||(m==='auto'&&(innerHeight/innerWidth>1.75||desk));document.body.classList.toggle('overlay',ov);document.body.classList.toggle('desk',desk&&m!=='below');}
+function applyLayout(){const m=SET.padLayout||'auto';const desk=innerWidth/innerHeight>1.15&&innerWidth>=820;const ov=true;document.body.classList.toggle('overlay',ov);document.body.classList.toggle('desk',desk&&m!=='below');}
 addEventListener('resize',applyLayout);addEventListener('orientationchange',applyLayout);
 function FOVK(){const a=Math.max(0.5,camera.aspect||1),v=h=>2*Math.atan(Math.tan(h*Math.PI/360)/a);return v(SET.fov||80)/v(80);}
 applyLayout();
@@ -3012,6 +3029,13 @@ function updateGas(dt){for(const g of GAS.slice()){g.t-=dt;const a=Math.min(1,(1
     if(g.t<=0){g.sp.forEach(s=>scene.remove(s));GAS.splice(GAS.indexOf(g),1);continue;}
     for(const e of enemies){if(e.dead||Math.hypot(e.x-g.x,e.z-g.z)>3.4)continue;damageEnemy(e,dt*1.4,false,new THREE.Vector3(0,0,1),true);e.snared=Math.max(e.snared||0,0.2);}}}
 function btnFor(act){const k=Object.keys(BMAP).find(k=>BMAP[k]===act);return k?BTN_NAMES[k]:'';}
+function fitMenu(){const el=$('menu'),ov=$('overlay');if(!el||!ov||!el.lastElementChild)return;ov.scrollTop=0;
+  // shrink until the last row sits fully inside the visible area above the controller
+  const pad=$('pad'),padTop=pad&&document.body.classList.contains('overlay')?pad.getBoundingClientRect().top:innerHeight;
+  const limit=()=>Math.min(ov.getBoundingClientRect().bottom,padTop)-6;const h1=$('ovtitle');
+  el.style.zoom=1;if(h1)h1.style.zoom=1;
+  for(const z of[1,0.93,0.86,0.8,0.74,0.68,0.62,0.56,0.5]){el.style.zoom=z;if(h1)h1.style.zoom=Math.max(0.7,z);if(el.lastElementChild.getBoundingClientRect().bottom<=limit()&&ov.scrollHeight<=ov.clientHeight+1)break;}}
+{const _bm=buildMenu;buildMenu=function(){_bm();fitMenu();setTimeout(fitMenu,120);setTimeout(fitMenu,600);};}addEventListener('resize',()=>setTimeout(fitMenu,50));if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>fitMenu());
 /* ================= loop ================= */
 buildNav();initFood();applyAttachments();equip('rifle');
 {const kk=document.getElementById('kicker');if(kk&&DEADZONE)kk.textContent='DEAD ZONE';}if(DEADZONE)applyOutfit(HAZMAT);else if(JSON.stringify(OUTFIT)!==JSON.stringify(OUTFIT_DEFAULT))applyOutfit(OUTFIT);
